@@ -1,0 +1,72 @@
+#!/usr/bin/env node
+
+var fs = require('fs'),
+	path = require('path'),
+	parser = new (require('../Parser'))(),
+	argv = process.argv,
+	i = 2,
+	len = argv.length,
+	results = [],
+	nicks = {},
+	conf, nick;
+
+function processMessage(info) {
+	var nick = info.nick;
+
+	// Check if there's a synonym for this nick that it should be counted under
+	nick = conf.synonyms[nick] || nick;
+
+	if (!nicks[nick]) {
+		nicks[nick] = {
+			nick: nick,
+			lines: 1,
+			chars: info.message.length
+		};
+	} else {
+		nicks[nick].lines++;
+		nicks[nick].chars += info.message.length;
+	}
+}
+
+if (len < 3) {
+	console.log('Usage: ./activity-json.js logfile1 [logfile2 ...] > output.json');
+	console.log('Note:  If multiple logs are specified, they will simply be');
+	console.log('       processed in order and factored into the same result set.');
+} else {
+	// Attempt to read conf (for limit and synonyms)
+	try {
+		conf = JSON.parse(fs.readFileSync(path.join(__dirname, 'activity.conf.json')));
+	} catch (e) {
+		conf = {};
+	}
+	if (!conf.synonyms) { conf.synonyms = {}; }
+
+	parser.on('message', processMessage);
+	parser.on('action', processMessage);
+	do { parser.parse(argv[i]); } while (++i < len);
+
+	for (nick in nicks) {
+		results.push(nicks[nick]);
+	}
+	results.sort(function (a, b) {
+		// Sort descending by chars, then by lines
+		if (a.chars > b.chars) {
+			return -1;
+		}
+		else if (a.chars < b.chars) {
+			return 1;
+		}
+		else {
+			if (a.lines > b.lines) {
+				return -1;
+			}
+			else if (a.lines < b.lines) {
+				return 1;
+			}
+			else {
+				return 0;
+			}
+		}
+	});
+	console.log(JSON.stringify(results.slice(0, conf.limit), null, conf.indent));
+}

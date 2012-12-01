@@ -1,0 +1,22 @@
+#!/usr/bin/env node
+
+var parser = new (require('../Parser'))(),
+	argv = process.argv,
+	first = true,
+	i = 2,
+	len = argv.length;
+
+if (len < 3) {
+	console.log('Usage: ./json.js logfile1 [logfile2 ...] > output.json');
+	console.log('Note:  If multiple logs are specified, they will simply be');
+	console.log('       processed in order and concatenated into the same array.');
+}
+else {
+	parser.onAll(function (info) {
+		process.stdout.write((first ? '' : ',\n') + JSON.stringify(info));
+		if (first) { first = false; }
+	});
+	console.log('[');
+	do { parser.parse(argv[i]); } while (++i < len);
+	console.log('\n]');
+}

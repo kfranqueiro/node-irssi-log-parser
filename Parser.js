@@ -1,26 +1,129 @@
 var fs = require('fs'),
 	util = require('util'),
 	EventEmitter = require('events').EventEmitter,
-	// Separator: $1 = Day changed / Log opened/closed; $2 = date
-	separatorRx = /^--- (\w+ \w+) (.*)$/,
-	// Join/part/etc.: $1 = time, $2 = nick, $3 = mask, $4 = joined/parted/etc., $5 = quit/part message
-	populateRx = /^(\d\d:\d\d:\d\d)-!- (\S+) \[([^\]]+)\] has (\w+)(?:[^\[]*\[([^\]]*))?/,
-	// Kick: $1 = time, $2 = nick, $3 = kicker, $4 = message
-	kickRx = /^(\d\d:\d\d:\d\d)-!- (\S+) was kicked from \S by (\S) \[([^\]]+)\]$/,
-	// Nick change: $1 = time, $2 = old nick, $3 = new nick
-	nickRx = /^(\d\d:\d\d:\d\d)-!- (\S+) is now known as (\S+)$/,
-	// Own nick change: $1 = time, $2 = new nick
-	ownNickRx = /^(\d\d:\d\d:\d\d)-!- You're now known as (\S+)$/,
-	// Total nicks in channel upon join: $1 = time, $2 = total, $3 = ops, $4 = halfops, $5 = voices, $6 = normal
-	nicksRx = /^(\d\d:\d\d:\d\d)-!- Irssi: \S+ Total of (\d+) nicks \[(\d+) ops, (\d+) halfops, (\d+) voices, (\d+) normal\]$/,
-	// Modes: $1 = time, $2 = modes, $3 = moder
-	modeRx = /^(\d\d:\d\d:\d\d)-!- (?:ServerM|m)ode\/\S+ \[([^\]]+)\] by (\S*)$/,
-	// Regular messages: $1 = time, $2 = mode, $3 = nick, $4 = message
-	messageRx = /^(\d\d:\d\d:\d\d)<(.)([^>]+)> (.*)$/,
-	// Actions: $1 = time, $2 = nick, $3 = message
-	actionRx = /^(\d\d:\d\d:\d\d) \* (\S+) (.*)$/,
 	// RegExp for stripping "ed" from "joined", "parted", "kicked"
-	edRx = /ed$/;
+	edRx = /ed$/,
+	// Default regular expressions for log parsing
+	defaultRegexps = {
+		// Separator: $1 = Day changed / Log opened/closed; $2 = date
+		separator: /^--- (\w+ \w+) (.*)$/,
+		// Join/part/etc.: $1 = time, $2 = nick, $3 = mask, $4 = joined/parted/etc., $5 = quit/part message
+		populate: /^(\d\d:\d\d:\d\d)-!- (\S+) \[([^\]]+)\] has (\w+)(?:[^\[]*\[([^\]]*))?/,
+		// Kick: $1 = time, $2 = nick, $3 = kicker, $4 = message
+		kick: /^(\d\d:\d\d:\d\d)-!- (\S+) was kicked from \S by (\S) \[([^\]]+)\]$/,
+		// Nick change: $1 = time, $2 = old nick, $3 = new nick
+		nick: /^(\d\d:\d\d:\d\d)-!- (\S+) is now known as (\S+)$/,
+		// Own nick change: $1 = time, $2 = new nick
+		ownNick: /^(\d\d:\d\d:\d\d)-!- You're now known as (\S+)$/,
+		// Total nicks in channel upon join: $1 = time, $2 = total, $3 = ops, $4 = halfops, $5 = voices, $6 = normal
+		nicks: /^(\d\d:\d\d:\d\d)-!- Irssi: \S+ Total of (\d+) nicks \[(\d+) ops, (\d+) halfops, (\d+) voices, (\d+) normal\]$/,
+		// Modes: $1 = time, $2 = modes, $3 = moder
+		mode: /^(\d\d:\d\d:\d\d)-!- (?:ServerM|m)ode\/\S+ \[([^\]]+)\] by (\S*)$/,
+		// Regular messages: $1 = time, $2 = mode, $3 = nick, $4 = message
+		message: /^(\d\d:\d\d:\d\d)<(.)([^>]+)> (.*)$/,
+		// Actions: $1 = time, $2 = nick, $3 = message
+		action: /^(\d\d:\d\d:\d\d) \* (\S+) (.*)$/
+	},
+	// Actions to be taken for each line type above
+	mappings = {
+		separator: function (match) {
+			var type = match[1];
+			this.currentDate = new Date(match[2]);
+			if (type === 'Day changed') {
+				// Just update currentDate; don't emit
+				return;
+			}
+			type = type === 'Log opened' ? 'logopen' : 'logclose';
+			if (type === 'logopen') {
+				// Update own nick on next join
+				this._setNick = true;
+			}
+
+			return {
+				type: type,
+				time: this.currentDate
+			};
+		},
+		populate: function (match) {
+			var type = match[4].replace(edRx, '');
+			if (this._setNick && type === 'join') {
+				// Logging client just joined the channel, so update nick
+				// (since own nick changes don't indicate previous nick)
+				this._nick = match[2];
+				this._setNick = false;
+			}
+			return {
+				type: type,
+				time: combineDateTime(this.currentDate, match[1]),
+				nick: match[2],
+				mask: match[3],
+				message: match[5]
+			};
+		},
+		kick: function (match) {
+			return {
+				type: 'kick',
+				time: combineDateTime(this.currentDate, match[1]),
+				nick: match[2],
+				by: match[3],
+				message: match[4]
+			};
+		},
+		nick: function (match) {
+			return {
+				type: 'nick',
+				time: combineDateTime(this.currentDate, match[1]),
+				nick: match[2],
+				newNick: match[3]
+			};
+		},
+		ownNick: function (match) {
+			return {
+				type: 'nick',
+				time: combineDateTime(this.currentDate, match[1]),
+				nick: this._nick,
+				newNick: (this._nick = match[2])
+			};
+		},
+		nicks: function (match) {
+			return {
+				type: 'nicks',
+				time: combineDateTime(this.currentDate, match[1]),
+				total: match[2],
+				ops: match[3],
+				halfops: match[4],
+				voices: match[5],
+				normal: match[6]
+			};
+		},
+		mode: function (match) {
+			return {
+				type: 'mode',
+				time: combineDateTime(this.currentDate, match[1]),
+				mode: match[2],
+				by: match[3]
+			};
+		},
+		message: function (match) {
+			return {
+				type: 'message',
+				time: combineDateTime(this.currentDate, match[1]),
+				mode: match[2],
+				nick: match[3],
+				message: match[4]
+			};
+		},
+		action: function (match) {
+			return {
+				type: 'action',
+				time: combineDateTime(this.currentDate, match[1]),
+				nick: match[2],
+				message: match[3]
+			};
+		}
+	},
+	// Order to test RegExps in, from least to most common (will iterate backwards)
+	testOrder = ['nicks', 'separator', 'ownNick', 'kick', 'mode', 'nick', 'action', 'populate', 'message'];
 
 function mixin(dest, src) {
 	Object.keys(src).forEach(function (k) {
@@ -50,104 +153,16 @@ util.inherits(Parser, EventEmitter);
 
 mixin(Parser.prototype, {
 	_parseLine: function (line) {
-		var match, type;
-		// Run through regular expressions defined above (in order of likelihood)
-		if ((match = messageRx.exec(line))) {
-			return {
-				type: 'message',
-				time: combineDateTime(this.currentDate, match[1]),
-				mode: match[2],
-				nick: match[3],
-				message: match[4]
-			};
-		}
-		else if ((match = populateRx.exec(line))) {
-			type = match[4].replace(edRx, '');
-			if (this._setNick && type === 'join') {
-				// Logging client just joined the channel, so update nick
-				// (since own nick changes don't indicate previous nick)
-				this._nick = match[2];
-				this._setNick = false;
-			}
-			return {
-				type: type,
-				time: combineDateTime(this.currentDate, match[1]),
-				nick: match[2],
-				mask: match[3],
-				message: match[5]
-			};
-		}
-		else if ((match = actionRx.exec(line))) {
-			return {
-				type: 'action',
-				time: combineDateTime(this.currentDate, match[1]),
-				nick: match[2],
-				message: match[3]
-			};
-		}
-		else if ((match = nickRx.exec(line))) {
-			return {
-				type: 'nick',
-				time: combineDateTime(this.currentDate, match[1]),
-				nick: match[2],
-				newNick: match[3]
-			};
-		}
-		else if ((match = ownNickRx.exec(line))) {
-			return {
-				type: 'nick',
-				time: combineDateTime(this.currentDate, match[1]),
-				nick: this._nick,
-				newNick: (this._nick = match[2])
-			};
-		}
-		else if ((match = modeRx.exec(line))) {
-			return {
-				type: 'mode',
-				time: combineDateTime(this.currentDate, match[1]),
-				mode: match[2],
-				by: match[3]
-			};
-		}
-		else if ((match = kickRx.exec(line))) {
-			return {
-				type: 'kick',
-				time: combineDateTime(this.currentDate, match[1]),
-				nick: match[2],
-				by: match[3],
-				message: match[4]
-			};
-		}
-		else if ((match = separatorRx.exec(line))) {
-			type = match[1];
-			this.currentDate = new Date(match[2]);
-			if (type === 'Day changed') {
-				// Just update currentDate; don't emit
-				return;
-			}
-			type = type === 'Log opened' ? 'logopen' : 'logclose';
-			if (type === 'logopen') {
-				// Update own nick on next join
-				this._setNick = true;
-			}
+		var i = testOrder.length,
+			key,
+			match;
 
-			return {
-				type: type,
-				time: this.currentDate
-			};
+		while (i--) {
+			key = testOrder[i];
+			if ((match = defaultRegexps[key].exec(line))) {
+				return mappings[key].call(this, match);
+			}
 		}
-		else if ((match = nicksRx.exec(line))) {
-			return {
-				type: 'nicks',
-				time: combineDateTime(this.currentDate, match[1]),
-				total: match[2],
-				ops: match[3],
-				halfops: match[4],
-				voices: match[5],
-				normal: match[6]
-			};
-		}
-
 		if (this.debug) {
 			console.warn('Unhandled line: ' + line);
 		}

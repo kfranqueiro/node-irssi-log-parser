@@ -10,8 +10,10 @@ var fs = require('fs'),
 		logopen: /^--- Log opened (.*)$/,
 		logclose: /^--- Log closed (.*)$/,
 		daychange: /^--- Day changed (.*)$/,
-		// Join/part/etc.: $1 = time, $2 = nick, $3 = mask, $4 = joined/parted/etc., $5 = quit/part message
-		populate: /^(\d\d:\d\d(?::\d\d)?)-!- (\S+) \[([^\]]+)\] has (\w+)(?:[^\[]*\[([^\]]*))?/,
+		// Join/part/quit: $1 = time, $2 = nick, $3 = mask, $4 = quit/part message
+		join: /^(\d\d:\d\d(?::\d\d)?)-!- (\S+) \[([^\]]+)\] has joined/,
+		part: /^(\d\d:\d\d(?::\d\d)?)-!- (\S+) \[([^\]]+)\] has left(?:[^\[]*\[([^\]]*))?/,
+		quit: /^(\d\d:\d\d(?::\d\d)?)-!- (\S+) \[([^\]]+)\] has quit(?:[^\[]*\[([^\]]*))?/,
 		// Kick: $1 = time, $2 = nick, $3 = kicker, $4 = message
 		kick: /^(\d\d:\d\d(?::\d\d)?)-!- (\S+) was kicked from \S by (\S) \[([^\]]+)\]$/,
 		// Nick change: $1 = time, $2 = old nick, $3 = new nick
@@ -45,11 +47,10 @@ var fs = require('fs'),
 			// Update currentDate but don't bother emitting an event
 			this.currentDate = new Date(match[1]);
 		},
-		populate: function (match) {
-			var type = match[4].replace(edRx, ''),
-				time = combineDateTime(this.currentDate, match[1]);
+		join: function (match) {
+			var time = combineDateTime(this.currentDate, match[1]);
 
-			if (type === 'join' && this._openTime && !this._joinNick &&
+			if (this._openTime && !this._joinNick &&
 					(time - this._openTime) < 2000) {
 
 				// First join after a log open should be the logging client
@@ -59,11 +60,28 @@ var fs = require('fs'),
 				this._joinNick = match[2];
 			}
 			return {
-				type: type,
+				type: 'join',
 				time: time,
 				nick: match[2],
+				mask: match[3]
+			};
+		},
+		part: function (match) {
+			return {
+				type: 'part',
+				time: combineDateTime(this.currentDate, match[1]),
+				nick: match[2],
 				mask: match[3],
-				message: match[5]
+				message: match[4]
+			};
+		},
+		quit: function (match) {
+			return {
+				type: 'quit',
+				time: combineDateTime(this.currentDate, match[1]),
+				nick: match[2],
+				mask: match[3],
+				message: match[4]
 			};
 		},
 		kick: function (match) {
@@ -141,7 +159,7 @@ var fs = require('fs'),
 		}
 	},
 	// Order to test RegExps in, from least to most common (will iterate backwards)
-	testOrder = ['nicks', 'daychange', 'logclose', 'logopen', 'ownNick', 'kick', 'mode', 'nick', 'action', 'populate', 'message'];
+	testOrder = ['nicks', 'daychange', 'logclose', 'logopen', 'ownNick', 'kick', 'mode', 'nick', 'part', 'quit', 'join', 'action', 'message'];
 
 function combineDateTime(date, time) {
 	// Yields a new Date object combining the given Date object and

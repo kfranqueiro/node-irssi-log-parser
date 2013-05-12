@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 
-var fs = require('fs'),
-	path = require('path'),
-	parser = new (require('../Parser'))(),
-	argv = process.argv,
-	i = 2,
-	len = argv.length,
+var argv = require('../util').parseArgvForConfig(),
+	params = argv.parameters,
+	conf = argv.options,
+	len = params.length,
+	parser = new (require('../Parser'))(argv.conf),
 	results = [],
 	nicks = {},
-	conf, nick;
+	i = 0,
+	nick;
 
 function processMessage(info) {
 	var nick = info.nick;
@@ -28,22 +28,22 @@ function processMessage(info) {
 	}
 }
 
-if (len < 3) {
+if (!len) {
 	console.log('Usage: ./activity-json.js logfile1 [logfile2 ...] > output.json');
 	console.log('Note:  If multiple logs are specified, they will simply be');
 	console.log('       processed in order and factored into the same result set.');
 } else {
 	// Attempt to read conf (for limit and synonyms)
-	try {
-		conf = JSON.parse(fs.readFileSync(path.join(__dirname, 'activity.conf.json')));
-	} catch (e) {
-		conf = {};
+	if (!conf.synonyms) {
+		conf.synonyms = {};
 	}
-	if (!conf.synonyms) { conf.synonyms = {}; }
 
 	parser.on('message', processMessage);
 	parser.on('action', processMessage);
-	do { parser.parse(argv[i]); } while (++i < len);
+	do {
+		parser.parse(params[i]);
+	}
+	while (++i < len);
 
 	for (nick in nicks) {
 		results.push(nicks[nick]);

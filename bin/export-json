@@ -1,22 +1,29 @@
 #!/usr/bin/env node
 
-var parser = new (require('../Parser'))(),
-	argv = process.argv,
+var argv = require('../util').parseArgvForConfig(),
+	params = argv.parameters,
+	len = params.length,
+	parser = new (require('../Parser'))(argv.options),
 	first = true,
-	i = 2,
-	len = argv.length;
+	i = 0;
 
-if (len < 3) {
-	console.log('Usage: ./json.js logfile1 [logfile2 ...] > output.json');
-	console.log('Note:  If multiple logs are specified, they will simply be');
-	console.log('       processed in order and concatenated into the same array.');
+if (!len) {
+	console.error('Usage: ./json.js [--config=file.json] logfile1 [logfile2 ...] > output.json');
+	console.error('Note:  If multiple logs are specified, they will simply be');
+	console.error('       processed in order and concatenated into the same array.');
 }
 else {
+	// Output all parsed log events in JSON format, line-by-line
 	parser.onAll(function (info) {
 		process.stdout.write((first ? '' : ',\n') + JSON.stringify(info));
-		if (first) { first = false; }
+		if (first) {
+			first = false;
+		}
 	});
 	console.log('[');
-	do { parser.parse(argv[i]); } while (++i < len);
+	do {
+		parser.parse(params[i]);
+	}
+	while (++i < len);
 	console.log('\n]');
 }

@@ -1,5 +1,6 @@
 var fs = require('fs'),
 	util = require('util'),
+	mixin = require('./util').mixin,
 	EventEmitter = require('events').EventEmitter,
 	// RegExp for stripping "ed" from "joined", "parted", "kicked"
 	edRx = /ed$/,
@@ -141,23 +142,6 @@ var fs = require('fs'),
 	},
 	// Order to test RegExps in, from least to most common (will iterate backwards)
 	testOrder = ['nicks', 'daychange', 'logclose', 'logopen', 'ownNick', 'kick', 'mode', 'nick', 'action', 'populate', 'message'];
-
-function mixin(dest) {
-	var len = arguments.length,
-		i,
-		src;
-
-	function copyProperty(k) {
-		dest[k] = src[k];
-	}
-
-	for (i = 1; i < len; i++) {
-		src = arguments[i];
-		Object.keys(src).forEach(copyProperty);
-	}
-
-	return dest;
-}
 
 function combineDateTime(date, time) {
 	// Yields a new Date object combining the given Date object and

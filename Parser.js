@@ -2,8 +2,6 @@ var fs = require('fs'),
 	util = require('util'),
 	mixin = require('./util').mixin,
 	EventEmitter = require('events').EventEmitter,
-	// RegExp for stripping "ed" from "joined", "parted", "kicked"
-	edRx = /ed$/,
 	// Default regular expressions for log parsing
 	defaultRegexps = {
 		// Log open / log close / day change: $1 = date+time

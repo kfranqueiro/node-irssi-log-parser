@@ -33,13 +33,11 @@ var fs = require('fs'),
 	mappings = {
 		logopen: function (match) {
 			return {
-				type: 'logopen',
 				time: (this.currentDate = this._openTime = new Date(match[1]))
 			};
 		},
 		logclose: function (match) {
 			return {
-				type: 'logclose',
 				time: (this.currentDate = new Date(match[1]))
 			};
 		},
@@ -60,7 +58,6 @@ var fs = require('fs'),
 				this._joinNick = match[2];
 			}
 			return {
-				type: 'join',
 				time: time,
 				nick: match[2],
 				mask: match[3]
@@ -68,7 +65,6 @@ var fs = require('fs'),
 		},
 		part: function (match) {
 			return {
-				type: 'part',
 				time: combineDateTime(this.currentDate, match[1]),
 				nick: match[2],
 				mask: match[3],
@@ -77,7 +73,6 @@ var fs = require('fs'),
 		},
 		quit: function (match) {
 			return {
-				type: 'quit',
 				time: combineDateTime(this.currentDate, match[1]),
 				nick: match[2],
 				mask: match[3],
@@ -86,7 +81,6 @@ var fs = require('fs'),
 		},
 		kick: function (match) {
 			return {
-				type: 'kick',
 				time: combineDateTime(this.currentDate, match[1]),
 				nick: match[2],
 				by: match[3],
@@ -95,7 +89,6 @@ var fs = require('fs'),
 		},
 		nick: function (match) {
 			return {
-				type: 'nick',
 				time: combineDateTime(this.currentDate, match[1]),
 				nick: match[2],
 				newNick: match[3]
@@ -123,7 +116,6 @@ var fs = require('fs'),
 			}
 
 			return {
-				type: 'nicks',
 				time: time,
 				total: match[2],
 				ops: match[3],
@@ -134,7 +126,6 @@ var fs = require('fs'),
 		},
 		mode: function (match) {
 			return {
-				type: 'mode',
 				time: combineDateTime(this.currentDate, match[1]),
 				mode: match[2],
 				by: match[3]
@@ -142,7 +133,6 @@ var fs = require('fs'),
 		},
 		message: function (match) {
 			return {
-				type: 'message',
 				time: combineDateTime(this.currentDate, match[1]),
 				mode: match[2],
 				nick: match[3],
@@ -151,7 +141,6 @@ var fs = require('fs'),
 		},
 		action: function (match) {
 			return {
-				type: 'action',
 				time: combineDateTime(this.currentDate, match[1]),
 				nick: match[2],
 				message: match[3]
@@ -205,12 +194,17 @@ mixin(Parser.prototype, {
 		var i = testOrder.length,
 			regexps = this.regexps || defaultRegexps,
 			key,
-			match;
+			match,
+			object;
 
 		while (i--) {
 			key = testOrder[i];
 			if ((match = regexps[key].exec(line))) {
-				return mappings[key].call(this, match);
+				object = mappings[key].call(this, match);
+				if (object && !object.type) {
+					object.type = key;
+				}
+				return object;
 			}
 		}
 		if (this.debug) {

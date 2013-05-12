@@ -161,6 +161,56 @@ function combineDateTime(date, time) {
 	return dateTime;
 }
 
+/**
+ * Hash containing regular expressions (or strings convertible to RegExps)
+ * to use for scanning log lines.  All properties are optional, and will
+ * default to regular expressions which match against irssi's default
+ * log format.
+ * @typedef {Object} ParserRegexps
+ * @property {string|RegExp} logopen "Log opened" message; $1 = date+time
+ * @property {string|RegExp} logclose "Log closed" message; $1 = date+time
+ * @property {string|RegExp} daychange "Day changed" message; $1 = date+time;
+ *		Note that these lines will not emit events
+ * @property {string|RegExp} join "X has joined" message;
+ *		$1 = time, $2 = nick, $3 = mask
+ * @property {string|RegExp} part "X has left" message;
+ *		$1 = time, $2 = nick, $3 = mask, $4 = message
+ * @property {string|RegExp} quit "X has quit" message;
+ *		$1 = time, $2 = nick, $3 = mask, $4 = message
+ * @property {string|RegExp} kick "X was kicked" message;
+ *		$1 = time, $2 = nick, $3 = kicker, $4 = message
+ * @property {string|RegExp} nick "X is now known as Y" message;
+ *		$1 = time, $2 = old nick, $3 = new nick
+ * @property {string|RegExp} ownNick "You're now known as X" message;
+ *		$1 = time, $2 = new nick
+ * @property {string|RegExp} nicks "Total of ..." message;
+ *		$1 = time, $2 = total, $3 = ops, $4 = halfops, $5 = voices, $6 = normal
+ * @property {string|RegExp} mode "mode ... by X" message;
+ *		$1 = time, $2 = modes, $3 = moder
+ * @property {string|RegExp} message Normal message;
+ *		$1 = time, $2 = mode, $3 = nick, $4 = message
+ * @property {string|RegExp} message Action (i.e. the /me command);
+ *		$1 = time, $2 = nick, $3 = message
+ */
+
+/**
+ * Options recognized by the Parser constructor.
+ * @typedef {Object} ParserOptions
+ * @property {string} defaultNick
+ *		Default initial nick to use for the logging client's own nick changes,
+ *		in case it cannot be discerned automatically from logopen + join + names
+ *		messages
+ * @property {boolean} debug
+ *		Flag which will cause unhandled log lines to be output to stderr
+ * @property {Object<string, ParserRegexps>} regexps
+ */
+
+/**
+ * Creates a new Parser with the specified options.
+ * @class
+ * @augments EventEmitter
+ * @param {ParserOptions} options Options to apply to the Parser instance
+ */
 var Parser = module.exports = function (options) {
 	var regexps = options && options.regexps,
 		key,
@@ -187,7 +237,7 @@ var Parser = module.exports = function (options) {
 };
 util.inherits(Parser, EventEmitter);
 
-mixin(Parser.prototype, {
+mixin(Parser.prototype, /** @lends Parser.prototype */ {
 	defaultNick: 'logging client',
 
 	_parseLine: function (line) {
@@ -233,6 +283,11 @@ mixin(Parser.prototype, {
 		return remainder;
 	},
 
+	/**
+	 * Parses the given log file.
+	 *
+	 * @param {string} filename File to parse
+	 */
 	parse: function (filename) {
 		var
 			resume = filename === true, // should only ever be set by resume calls
@@ -256,16 +311,20 @@ mixin(Parser.prototype, {
 		}
 	},
 
+	/**
+	 * Pauses parsing after the currently-read chunk.
+	 * This means that it might not pause right after the current line, but it
+	 * will before the file is read any further.
+	 * Additional calls to this function when already paused do nothing.
+	 */
 	pause: function () {
-		// Pauses after the currently-read chunk is processed.
-		// This means that it might not pause right after the current line, but
-		// it will before the file is read any further.
-		// Consecutive calls to this function when already paused are harmless.
 		this._paused = true;
 	},
 
+	/**
+	 * Causes the previous parse to continue where it left off.
+	 */
 	resume: function () {
-		// Causes the previous parse to continue where it left off.
 		if (this._paused) {
 			this._paused = false;
 			this.parse(true);
@@ -288,6 +347,17 @@ mixin(Parser.prototype, {
 		}
 	},
 
+	/**
+	 * Object containing a remove method for unhooking itself.
+	 * @typedef {Object} RemovableListener
+	 * @property {function} remove Method that can be called to unhook the listener
+	 */
+
+	/**
+	 * Binds a function to all emitted events.
+	 * @param handler {function} The handler to fire on every processed log message
+	 * @return {RemovableListener}
+	 */
 	onAll: function (handler) {
 		// Binds a function to all emitted events.
 		// Rather than impose an obtuse separate removal method,

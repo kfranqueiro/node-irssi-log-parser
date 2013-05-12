@@ -1,5 +1,6 @@
 var fs = require('fs'),
 	util = module.exports = {
+		/** @module util */
 		/**
 		 * Takes a destination object and any number of source objects, and
 		 * shallow-copies each source's values into the destination object.
@@ -7,7 +8,7 @@ var fs = require('fs'),
 		 * the rightmost's key will win.
 		 * 
 		 * @param {Object} dest Object to receive properties from source(s)
-		 * @param {...Object} sources Objects to be mixed into the destination object
+		 * @param {...Object} source Object to be mixed into the destination object
 		 * @return {Object} Destination object, now including properties from source(s)
 		 **/
 		mixin: function (dest) {
@@ -28,14 +29,19 @@ var fs = require('fs'),
 		},
 
 		/**
+		 * Contains options and parameters discovered by parseArgv.
+		 * @typedef {Object} ParsedArgv
+		 * @property {Object} options Hash mapping any found option keys to
+		 *		their values (or true if the option was a key with no value)
+		 * @property {string[]} parameters Array containing any other arguments
+		*/
+
+		/**
 		 * Parses argv for options in the format --opt or --opt=value.
 		 * Yes, there are robust node libraries for option parsing, but
 		 * for this simple purpose, incurring a 500-LOC dependency is overkill.
 		 *
-		 * @return { { options:Object parameters:String[] } }
-		 *		Object containing an options object mapping any found
-		 *		option keys to their values, and a parameters array containing
-		 *		any other arguments.
+		 * @return {ParsedArgv}
 		 */
 		parseArgv: function () {
 			var argv = process.argv,
@@ -65,17 +71,23 @@ var fs = require('fs'),
 		},
 
 		/**
+		 * Contains options and parameters discovered by parseArgvForConfig.
+		 * @typedef {Object} ParsedArgvWithConfig
+		 * @property {Object} options Hash based on parsed config, additionally
+		 *		mapping any other found option keys to their values (or true if
+		 *		the option was a key with no value)
+		 * @property {string[]} parameters Array containing any other arguments
+		*/
+
+		/**
 		 * Parses argv for options in the format --opt or --opt=value, then
 		 * attempts to open a configuration file in JSON format based on a
 		 * path provided via the given paramName; if found, the config will be
 		 * used as a base upon which any other command-line arguments will be
 		 * mixed atop.
 		 *
-		 * @param {String} [name="config"] Name of option to check for config filename
-		 * @return { { options:Object parameters:String[] } }
-		 *		Object containing an options object mapping any found
-		 *		config properties and option keys to their values, and a
-		 *		parameters array containing any other arguments.
+		 * @param {string} [name="config"] Name of option to check for config filename
+		 * @return {ParsedArgvWithConfig}
 		 */
 		parseArgvForConfig: function (name) {
 			name = name || 'config';

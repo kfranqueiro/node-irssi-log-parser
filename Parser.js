@@ -142,10 +142,21 @@ var fs = require('fs'),
 	// Order to test RegExps in, from least to most common (will iterate backwards)
 	testOrder = ['nicks', 'daychange', 'logclose', 'logopen', 'ownNick', 'kick', 'mode', 'nick', 'action', 'populate', 'message'];
 
-function mixin(dest, src) {
-	Object.keys(src).forEach(function (k) {
+function mixin(dest) {
+	var len = arguments.length,
+		i,
+		src;
+
+	function copyProperty(k) {
 		dest[k] = src[k];
-	});
+	}
+
+	for (i = 1; i < len; i++) {
+		src = arguments[i];
+		Object.keys(src).forEach(copyProperty);
+	}
+
+	return dest;
 }
 
 function combineDateTime(date, time) {
@@ -160,10 +171,27 @@ function combineDateTime(date, time) {
 }
 
 var Parser = module.exports = function (options) {
+	var regexps = options && options.regexps,
+		key,
+		rx;
+
 	EventEmitter.call(this);
-	if (options) {
-		mixin(this, options);
+
+	if (regexps) {
+		for (key in regexps) {
+			// Allow strings to be passed in (e.g. from JSON),
+			// instantiating RegExps from them here
+			rx = regexps[key];
+			if (typeof rx === 'string') {
+				regexps[key] = new RegExp(rx);
+			}
+		}
+		// Mix provided regexps on top of defaults to allow partial override
+		options.regexps = mixin({}, defaultRegexps, regexps);
 	}
+
+	options && mixin(this, options);
+
 	this._onAllHandlers = [];
 };
 util.inherits(Parser, EventEmitter);
@@ -173,12 +201,13 @@ mixin(Parser.prototype, {
 
 	_parseLine: function (line) {
 		var i = testOrder.length,
+			regexps = this.regexps || defaultRegexps,
 			key,
 			match;
 
 		while (i--) {
 			key = testOrder[i];
-			if ((match = defaultRegexps[key].exec(line))) {
+			if ((match = regexps[key].exec(line))) {
 				return mappings[key].call(this, match);
 			}
 		}

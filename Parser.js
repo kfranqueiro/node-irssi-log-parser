@@ -5,44 +5,44 @@ var fs = require('fs'),
 	edRx = /ed$/,
 	// Default regular expressions for log parsing
 	defaultRegexps = {
-		// Separator: $1 = Day changed / Log opened/closed; $2 = date
-		separator: /^--- (\w+ \w+) (.*)$/,
+		// Log open / log close / day change: $1 = date+time
+		logopen: /^--- Log opened (.*)$/,
+		logclose: /^--- Log closed (.*)$/,
+		daychange: /^--- Day changed (.*)$/,
 		// Join/part/etc.: $1 = time, $2 = nick, $3 = mask, $4 = joined/parted/etc., $5 = quit/part message
-		populate: /^(\d\d:\d\d:\d\d)-!- (\S+) \[([^\]]+)\] has (\w+)(?:[^\[]*\[([^\]]*))?/,
+		populate: /^(\d\d:\d\d(?::\d\d)?)-!- (\S+) \[([^\]]+)\] has (\w+)(?:[^\[]*\[([^\]]*))?/,
 		// Kick: $1 = time, $2 = nick, $3 = kicker, $4 = message
-		kick: /^(\d\d:\d\d:\d\d)-!- (\S+) was kicked from \S by (\S) \[([^\]]+)\]$/,
+		kick: /^(\d\d:\d\d(?::\d\d)?)-!- (\S+) was kicked from \S by (\S) \[([^\]]+)\]$/,
 		// Nick change: $1 = time, $2 = old nick, $3 = new nick
-		nick: /^(\d\d:\d\d:\d\d)-!- (\S+) is now known as (\S+)$/,
+		nick: /^(\d\d:\d\d(?::\d\d)?)-!- (\S+) is now known as (\S+)$/,
 		// Own nick change: $1 = time, $2 = new nick
-		ownNick: /^(\d\d:\d\d:\d\d)-!- You're now known as (\S+)$/,
+		ownNick: /^(\d\d:\d\d(?::\d\d)?)\W+You're now known as (\S+)$/,
 		// Total nicks in channel upon join: $1 = time, $2 = total, $3 = ops, $4 = halfops, $5 = voices, $6 = normal
-		nicks: /^(\d\d:\d\d:\d\d)-!- Irssi: \S+ Total of (\d+) nicks \[(\d+) ops, (\d+) halfops, (\d+) voices, (\d+) normal\]$/,
+		nicks: /^(\d\d:\d\d(?::\d\d)?)\W+Irssi: \S+ Total of (\d+) nicks \[(\d+) ops, (\d+) halfops, (\d+) voices, (\d+) normal\]$/,
 		// Modes: $1 = time, $2 = modes, $3 = moder
-		mode: /^(\d\d:\d\d:\d\d)-!- (?:ServerM|m)ode\/\S+ \[([^\]]+)\] by (\S*)$/,
+		mode: /^(\d\d:\d\d(?::\d\d)?)-!- (?:ServerM|m)ode\/\S+ \[([^\]]+)\] by (\S*)$/,
 		// Regular messages: $1 = time, $2 = mode, $3 = nick, $4 = message
-		message: /^(\d\d:\d\d:\d\d)<(.)([^>]+)> (.*)$/,
+		message: /^(\d\d:\d\d(?::\d\d)?)<(.)([^>]+)> (.*)$/,
 		// Actions: $1 = time, $2 = nick, $3 = message
-		action: /^(\d\d:\d\d:\d\d) \* (\S+) (.*)$/
+		action: /^(\d\d:\d\d(?::\d\d)?) \* (\S+) (.*)$/
 	},
 	// Actions to be taken for each line type above
 	mappings = {
-		separator: function (match) {
-			var type = match[1];
-			this.currentDate = new Date(match[2]);
-			if (type === 'Day changed') {
-				// Just update currentDate; don't emit
-				return;
-			}
-			type = type === 'Log opened' ? 'logopen' : 'logclose';
-			if (type === 'logopen') {
-				// Update own nick on next join
-				this._setNick = true;
-			}
-
+		logopen: function (match) {
 			return {
-				type: type,
-				time: this.currentDate
+				type: 'logopen',
+				time: (this.currentDate = this._openTime = new Date(match[1]))
 			};
+		},
+		logclose: function (match) {
+			return {
+				type: 'logclose',
+				time: (this.currentDate = new Date(match[1]))
+			};
+		},
+		daychange: function (match) {
+			// Update currentDate but don't bother emitting an event
+			this.currentDate = new Date(match[1]);
 		},
 		populate: function (match) {
 			var type = match[4].replace(edRx, '');
@@ -123,7 +123,7 @@ var fs = require('fs'),
 		}
 	},
 	// Order to test RegExps in, from least to most common (will iterate backwards)
-	testOrder = ['nicks', 'separator', 'ownNick', 'kick', 'mode', 'nick', 'action', 'populate', 'message'];
+	testOrder = ['nicks', 'daychange', 'logclose', 'logopen', 'ownNick', 'kick', 'mode', 'nick', 'action', 'populate', 'message'];
 
 function mixin(dest, src) {
 	Object.keys(src).forEach(function (k) {
@@ -138,7 +138,7 @@ function combineDateTime(date, time) {
 		timeParts = time.split(':');
 	dateTime.setHours(parseInt(timeParts[0], 10));
 	dateTime.setMinutes(parseInt(timeParts[1], 10));
-	dateTime.setSeconds(parseInt(timeParts[2], 10));
+	dateTime.setSeconds(parseInt(timeParts[2] || 0, 10));
 	return dateTime;
 }
 

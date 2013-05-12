@@ -45,16 +45,21 @@ var fs = require('fs'),
 			this.currentDate = new Date(match[1]);
 		},
 		populate: function (match) {
-			var type = match[4].replace(edRx, '');
-			if (this._setNick && type === 'join') {
-				// Logging client just joined the channel, so update nick
-				// (since own nick changes don't indicate previous nick)
-				this._nick = match[2];
-				this._setNick = false;
+			var type = match[4].replace(edRx, ''),
+				time = combineDateTime(this.currentDate, match[1]);
+
+			if (type === 'join' && this._openTime && !this._joinNick &&
+					(time - this._openTime) < 2000) {
+
+				// First join after a log open should be the logging client
+				// (unless log rotation is in play);
+				// update internal variable which will be confirmed
+				// once we receive a total nicks message
+				this._joinNick = match[2];
 			}
 			return {
 				type: type,
-				time: combineDateTime(this.currentDate, match[1]),
+				time: time,
 				nick: match[2],
 				mask: match[3],
 				message: match[5]
@@ -81,14 +86,26 @@ var fs = require('fs'),
 			return {
 				type: 'nick',
 				time: combineDateTime(this.currentDate, match[1]),
-				nick: this._nick,
+				nick: this._nick || this.defaultNick,
 				newNick: (this._nick = match[2])
 			};
 		},
 		nicks: function (match) {
+			var time = combineDateTime(this.currentDate, match[1]);
+
+			// "Total of x nicks" message logs immediately after client joins,
+			// but also any time the /names command is manually run;
+			// in only the former case, update logging client's current nick
+			// (since the client's own nick change messages don't include it)
+			if (this._joinNick && (time - this._openTime) < 2000) {
+				this._nick = this._joinNick;
+				delete this._joinNick;
+				delete this._openTime;
+			}
+
 			return {
 				type: 'nicks',
-				time: combineDateTime(this.currentDate, match[1]),
+				time: time,
 				total: match[2],
 				ops: match[3],
 				halfops: match[4],
@@ -152,6 +169,8 @@ var Parser = module.exports = function (options) {
 util.inherits(Parser, EventEmitter);
 
 mixin(Parser.prototype, {
+	defaultNick: 'logging client',
+
 	_parseLine: function (line) {
 		var i = testOrder.length,
 			key,

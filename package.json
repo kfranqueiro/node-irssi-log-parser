@@ -1,0 +1,23 @@
+{
+	"name": "node-irssi-log-parser",
+	"description": "Node.js module and scripts for parsing irssi client logs",
+	"author": "Kenneth G. Franqueiro",
+
+	"version": "0.1.0-dev",
+	"engines": {
+		"node": ">=0.8"
+	},
+	"main": "Parser",
+
+	"bugs": "https://github.com/kfranqueiro/node-irssi-log-parser/issues",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/kfranqueiro/node-irssi-log-parser.git"
+	},
+	"licenses": [
+		{
+			"type": "MIT",
+			"url": "http://www.opensource.org/licenses/mit-license.php"
+		}
+	]
+}

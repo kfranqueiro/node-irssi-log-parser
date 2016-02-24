@@ -23,7 +23,7 @@ var fs = require('fs'),
 		// Modes: $1 = time, $2 = modes, $3 = moder
 		mode: /^(\d\d:\d\d(?::\d\d)?)-!- (?:ServerM|m)ode\/\S+ \[([^\]]+)\] by (\S*)$/,
 		// Regular messages: $1 = time, $2 = mode, $3 = nick, $4 = message
-		message: /^(\d\d:\d\d(?::\d\d)?)<(.)([^>]+)> (.*)$/,
+		message: /^(\d\d:\d\d(?::\d\d)?) <(.)([^>]+)> (.*)$/,
 		// Actions: $1 = time, $2 = nick, $3 = message
 		action: /^(\d\d:\d\d(?::\d\d)?) \* (\S+) (.*)$/
 	},

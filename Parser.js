@@ -9,23 +9,23 @@ var fs = require('fs'),
 		logclose: /^--- Log closed (.*)$/,
 		daychange: /^--- Day changed (.*)$/,
 		// Join/part/quit: $1 = time, $2 = nick, $3 = mask, $4 = quit/part message
-		join: /^(\d\d:\d\d(?::\d\d)?)-!- (\S+) \[([^\]]+)\] has joined/,
-		part: /^(\d\d:\d\d(?::\d\d)?)-!- (\S+) \[([^\]]+)\] has left(?:[^\[]*\[([^\]]*))?/,
-		quit: /^(\d\d:\d\d(?::\d\d)?)-!- (\S+) \[([^\]]+)\] has quit(?:[^\[]*\[([^\]]*))?/,
+		join: /^(\d\d:\d\d(?::\d\d)?)\s?-!- (\S+) \[([^\]]+)\] has joined/,
+		part: /^(\d\d:\d\d(?::\d\d)?)\s?-!- (\S+) \[([^\]]+)\] has left(?:[^\[]*\[([^\]]*))?/,
+		quit: /^(\d\d:\d\d(?::\d\d)?)\s?-!- (\S+) \[([^\]]+)\] has quit(?:[^\[]*\[([^\]]*))?/,
 		// Kick: $1 = time, $2 = nick, $3 = kicker, $4 = message
-		kick: /^(\d\d:\d\d(?::\d\d)?)-!- (\S+) was kicked from \S by (\S) \[([^\]]+)\]$/,
+		kick: /^(\d\d:\d\d(?::\d\d)?)\s?-!- (\S+) was kicked from \S by (\S) \[([^\]]+)\]$/,
 		// Nick change: $1 = time, $2 = old nick, $3 = new nick
-		nick: /^(\d\d:\d\d(?::\d\d)?)-!- (\S+) is now known as (\S+)$/,
+		nick: /^(\d\d:\d\d(?::\d\d)?)\s?-!- (\S+) is now known as (\S+)$/,
 		// Own nick change: $1 = time, $2 = new nick
 		ownNick: /^(\d\d:\d\d(?::\d\d)?)\W+You're now known as (\S+)$/,
 		// Total nicks in channel upon join: $1 = time, $2 = total, $3 = ops, $4 = halfops, $5 = voices, $6 = normal
 		nicks: /^(\d\d:\d\d(?::\d\d)?)\W+Irssi: \S+ Total of (\d+) nicks \[(\d+) ops, (\d+) halfops, (\d+) voices, (\d+) normal\]$/,
 		// Modes: $1 = time, $2 = modes, $3 = moder
-		mode: /^(\d\d:\d\d(?::\d\d)?)-!- (?:ServerM|m)ode\/\S+ \[([^\]]+)\] by (\S*)$/,
+		mode: /^(\d\d:\d\d(?::\d\d)?)\s?-!- (?:ServerM|m)ode\/\S+ \[([^\]]+)\] by (\S*)$/,
 		// Regular messages: $1 = time, $2 = mode, $3 = nick, $4 = message
-		message: /^(\d\d:\d\d(?::\d\d)?)<(.)([^>]+)> (.*)$/,
+		message: /^(\d\d:\d\d(?::\d\d)?)\s?<(.)([^>]+)> (.*)$/,
 		// Actions: $1 = time, $2 = nick, $3 = message
-		action: /^(\d\d:\d\d(?::\d\d)?) \* (\S+) (.*)$/
+		action: /^(\d\d:\d\d(?::\d\d)?)\s?\* (\S+) (.*)$/
 	},
 	// Actions to be taken for each line type above
 	mappings = {

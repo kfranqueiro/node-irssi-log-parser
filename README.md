@@ -12,7 +12,7 @@ The `Parser.js` module exports a constructor which will create instances of the
 parser.  Generally, the primary method of interest on instances is the `parse`
 method, which will parse a specified log file.  For more details on public
 instance methods, as well as acceptable configuration options, see the
-[Parser API documentation](http://kfranqueiro.github.io/node-irssi-log-parser/api/Parser.html).
+[Parser API documentation](API.md).
 
 The parser emits events for each type of message that can appear in the log.
 Generally, all events include `type` and `time` properties indicating what type
@@ -23,8 +23,7 @@ format; however, the regular expressions used to parse different types of
 messages can be selectively overridden by passing a configuration object
 containing a `regexps` property to the `Parser` constructor.  Information on the
 overrideable regular expressions, and what they are expected to yield when
-executed, is available in the
-[ParserRegexps API documentation](http://kfranqueiro.github.io/node-irssi-log-parser/api/global.html#ParserRegexps).
+executed, is available in the [ParserRegexps API documentation](API.md#ParserRegexps).
 
 ## JSON Export
 

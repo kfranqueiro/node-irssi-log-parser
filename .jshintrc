@@ -11,8 +11,6 @@
 	"dojo": false,
 	"eqeqeq": true,
 	"eqnull": true,
-	"es5": true,
-	"esnext": false,
 	"evil": false,
 	"expr": true,
 	"forin": false,

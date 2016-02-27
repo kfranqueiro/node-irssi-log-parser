@@ -2,7 +2,7 @@
 	"name": "node-irssi-log-parser",
 	"description": "Node.js module and scripts for parsing irssi client logs",
 	"author": "Kenneth G. Franqueiro",
-	"version": "0.1.0-dev",
+	"version": "0.1.0",
 	"main": "Parser",
 
 	"bugs": "https://github.com/kfranqueiro/node-irssi-log-parser/issues",

@@ -18,7 +18,7 @@ log format.</p>
 <dd><p>Options recognized by the Parser constructor.</p>
 </dd>
 <dt><a href="#RemovableListener">RemovableListener</a> : <code>Object</code></dt>
-<dd><p>Object containing a remove method for unhooking itself.</p>
+<dd><p>Object containing a <code>remove</code> method for unhooking itself.</p>
 </dd>
 </dl>
 
@@ -88,19 +88,20 @@ log format.
 
 | Name | Type | Description |
 | --- | --- | --- |
-| logopen | <code>string</code> &#124; <code>RegExp</code> | "Log opened" message; $1 = date+time |
-| logclose | <code>string</code> &#124; <code>RegExp</code> | "Log closed" message; $1 = date+time |
-| daychange | <code>string</code> &#124; <code>RegExp</code> | "Day changed" message; $1 = date+time; 		Note that these lines will not emit events |
-| join | <code>string</code> &#124; <code>RegExp</code> | "X has joined" message; 		`$1` = time, `$2` = nick, `$3` = mask |
-| part | <code>string</code> &#124; <code>RegExp</code> | "X has left" message; 		`$1` = time, `$2` = nick, `$3` = mask, `$4` = message |
-| quit | <code>string</code> &#124; <code>RegExp</code> | "X has quit" message; 		`$1` = time, `$2` = nick, `$3` = mask, `$4` = message |
-| kick | <code>string</code> &#124; <code>RegExp</code> | "X was kicked" message; 		`$1` = time, `$2` = nick, `$3` = kicker, `$4` = message |
-| nick | <code>string</code> &#124; <code>RegExp</code> | "X is now known as Y" message; 		`$1` = time, `$2` = old nick, `$3` = new nick |
-| ownNick | <code>string</code> &#124; <code>RegExp</code> | "You're now known as X" message; 		`$1` = time, `$2` = new nick |
-| nicks | <code>string</code> &#124; <code>RegExp</code> | "Total of ..." message; 		`$1` = time, `$2` = total, `$3` = ops, `$4` = halfops, `$5` = voices, `$6` = normal |
-| mode | <code>string</code> &#124; <code>RegExp</code> | "mode ... by X" message; 		`$1` = time, `$2` = modes, `$3` = moder |
-| message | <code>string</code> &#124; <code>RegExp</code> | Normal message; 		`$1` = time, `$2` = mode, `$3` = nick, `$4` = message |
-| action | <code>string</code> &#124; <code>RegExp</code> | Action (i.e. the /me command); 		`$1` = time, `$2` = nick, `$3` = message |
+| logopen | <code>string</code> &#124; <code>RegExp</code> | "Log opened" message; `$1` = date+time |
+| logclose | <code>string</code> &#124; <code>RegExp</code> | "Log closed" message; `$1` = date+time |
+| daychange | <code>string</code> &#124; <code>RegExp</code> | "Day changed" message; `$1` = date+time; 		Note that these lines will not emit events |
+| timestamp | <code>string</code> &#124; <code>RegExp</code> | Timestamp (prefixes all other message types listed below) |
+| join | <code>string</code> &#124; <code>RegExp</code> | "X has joined" message; 		`$1` = nick, `$2` = mask |
+| part | <code>string</code> &#124; <code>RegExp</code> | "X has left" message; 		`$1` = nick, `$2` = mask, `$3` = message |
+| quit | <code>string</code> &#124; <code>RegExp</code> | "X has quit" message; 		`$1` = nick, `$2` = mask, `$3` = message |
+| kick | <code>string</code> &#124; <code>RegExp</code> | "X was kicked" message; 		`$1` = nick, `$2` = kicker, `$3` = message |
+| nick | <code>string</code> &#124; <code>RegExp</code> | "X is now known as Y" message; 		`$1` = old nick, `$2` = new nick |
+| ownNick | <code>string</code> &#124; <code>RegExp</code> | "You're now known as X" message; 		`$1` = new nick |
+| nicks | <code>string</code> &#124; <code>RegExp</code> | "Total of ..." message; 		`$1` = total, `$2` = ops, `$3` = halfops, `$4` = voices, `$5` = normal |
+| mode | <code>string</code> &#124; <code>RegExp</code> | "mode ... by X" message; 		`$1` = modes, `$2` = moder |
+| message | <code>string</code> &#124; <code>RegExp</code> | Normal message; 		`$1` = mode, `$2` = nick, `$3` = message |
+| action | <code>string</code> &#124; <code>RegExp</code> | Action (i.e. the /me command); 		`$1` = nick, `$2` = message |
 
 <a name="ParserOptions"></a>
 ## ParserOptions : <code>Object</code>
@@ -117,7 +118,7 @@ Options recognized by the Parser constructor.
 
 <a name="RemovableListener"></a>
 ## RemovableListener : <code>Object</code>
-Object containing a remove method for unhooking itself.
+Object containing a `remove` method for unhooking itself.
 
 **Kind**: global typedef  
 **Properties**

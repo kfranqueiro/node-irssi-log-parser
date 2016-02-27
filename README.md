@@ -23,7 +23,7 @@ format; however, the regular expressions used to parse different types of
 messages can be selectively overridden by passing a configuration object
 containing a `regexps` property to the `Parser` constructor.  Information on the
 overrideable regular expressions, and what they are expected to yield when
-executed, is available in the [ParserRegexps API documentation](API.md#ParserRegexps).
+executed, is available in the [ParserRegexps API documentation](API.md#parserregexps--object).
 
 ## JSON Export
 

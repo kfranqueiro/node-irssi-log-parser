@@ -2,31 +2,58 @@ var fs = require('fs');
 var util = require('util');
 var mixin = require('./util').mixin;
 var EventEmitter = require('events').EventEmitter;
-// Default regular expressions for log parsing
+
+/**
+ * Hash containing regular expressions (or strings convertible to RegExps)
+ * to use for scanning log lines.  All properties are optional, and will
+ * default to regular expressions which match against irssi's default
+ * log format.
+ * @typedef {Object} ParserRegexps
+ * @property {string|RegExp} logopen "Log opened" message; `$1` = date+time
+ * @property {string|RegExp} logclose "Log closed" message; `$1` = date+time
+ * @property {string|RegExp} daychange "Day changed" message; `$1` = date+time;
+ *		Note that these lines will not emit events
+ * @property {string|RegExp} timestamp Timestamp (prefixes all other message types listed below)
+ * @property {string|RegExp} join "X has joined" message;
+ *		`$1` = nick, `$2` = mask
+ * @property {string|RegExp} part "X has left" message;
+ *		`$1` = nick, `$2` = mask, `$3` = message
+ * @property {string|RegExp} quit "X has quit" message;
+ *		`$1` = nick, `$2` = mask, `$3` = message
+ * @property {string|RegExp} kick "X was kicked" message;
+ *		`$1` = nick, `$2` = kicker, `$3` = message
+ * @property {string|RegExp} nick "X is now known as Y" message;
+ *		`$1` = old nick, `$2` = new nick
+ * @property {string|RegExp} ownNick "You're now known as X" message;
+ *		`$1` = new nick
+ * @property {string|RegExp} nicks "Total of ..." message;
+ *		`$1` = total, `$2` = ops, `$3` = halfops, `$4` = voices, `$5` = normal
+ * @property {string|RegExp} mode "mode ... by X" message;
+ *		`$1` = modes, `$2` = moder
+ * @property {string|RegExp} message Normal message;
+ *		`$1` = mode, `$2` = nick, `$3` = message
+ * @property {string|RegExp} action Action (i.e. the /me command);
+ *		`$1` = nick, `$2` = message
+ */
+
+// Default regular expressions for log parsing; see above for capture group meanings
 var defaultRegexps = {
-	// Log open / log close / day change: $1 = date+time
 	logopen: /^--- Log opened (.*)$/,
 	logclose: /^--- Log closed (.*)$/,
 	daychange: /^--- Day changed (.*)$/,
-	// Join/part/quit: $1 = time, $2 = nick, $3 = mask, $4 = quit/part message
-	join: /^(\d\d:\d\d(?::\d\d)?)-!- (\S+) \[([^\]]+)\] has joined/,
-	part: /^(\d\d:\d\d(?::\d\d)?)-!- (\S+) \[([^\]]+)\] has left(?:[^\[]*\[([^\]]*))?/,
-	quit: /^(\d\d:\d\d(?::\d\d)?)-!- (\S+) \[([^\]]+)\] has quit(?:[^\[]*\[([^\]]*))?/,
-	// Kick: $1 = time, $2 = nick, $3 = kicker, $4 = message
-	kick: /^(\d\d:\d\d(?::\d\d)?)-!- (\S+) was kicked from \S by (\S) \[([^\]]+)\]$/,
-	// Nick change: $1 = time, $2 = old nick, $3 = new nick
-	nick: /^(\d\d:\d\d(?::\d\d)?)-!- (\S+) is now known as (\S+)$/,
-	// Own nick change: $1 = time, $2 = new nick
-	ownNick: /^(\d\d:\d\d(?::\d\d)?)\W+You're now known as (\S+)$/,
-	// Total nicks in channel upon join: $1 = time, $2 = total, $3 = ops, $4 = halfops, $5 = voices, $6 = normal
-	nicks: /^(\d\d:\d\d(?::\d\d)?)\W+Irssi: \S+ Total of (\d+) nicks \[(\d+) ops, (\d+) halfops, (\d+) voices, (\d+) normal\]$/,
-	// Modes: $1 = time, $2 = modes, $3 = moder
-	mode: /^(\d\d:\d\d(?::\d\d)?)-!- (?:ServerM|m)ode\/\S+ \[([^\]]+)\] by (\S*)$/,
-	// Regular messages: $1 = time, $2 = mode, $3 = nick, $4 = message
-	message: /^(\d\d:\d\d(?::\d\d)?)<(.)([^>]+)> (.*)$/,
-	// Actions: $1 = time, $2 = nick, $3 = message
-	action: /^(\d\d:\d\d(?::\d\d)?) \* (\S+) (.*)$/
+	timestamp: /^\d\d:\d\d(?::\d\d)?\s*/,
+	join: /^-!- (\S+) \[([^\]]+)\] has joined/,
+	part: /^-!- (\S+) \[([^\]]+)\] has left(?:[^\[]*\[([^\]]*))?/,
+	quit: /^-!- (\S+) \[([^\]]+)\] has quit(?:[^\[]*\[([^\]]*))?/,
+	kick: /^-!- (\S+) was kicked from \S by (\S) \[([^\]]+)\]$/,
+	nick: /^-!- (\S+) is now known as (\S+)$/,
+	ownNick: /^\W+You're now known as (\S+)$/,
+	nicks: /^\W+Irssi: \S+ Total of (\d+) nicks \[(\d+) ops, (\d+) halfops, (\d+) voices, (\d+) normal\]$/,
+	mode: /^-!- (?:ServerM|m)ode\/\S+ \[([^\]]+)\] by (\S*)$/,
+	message: /^<(.)([^>]+)> (.*)$/,
+	action: /^\s*\* (\S+) (.*)$/
 };
+
 // Actions to be taken for each line type above
 var mappings = {
 	logopen: function (match) {
@@ -43,9 +70,7 @@ var mappings = {
 		// Update currentDate but don't bother emitting an event
 		this.currentDate = new Date(match[1]);
 	},
-	join: function (match) {
-		var time = combineDateTime(this.currentDate, match[1]);
-
+	join: function (match, time) {
 		if (this._openTime && !this._joinNick &&
 				(time - this._openTime) < 2000) {
 
@@ -53,56 +78,54 @@ var mappings = {
 			// (unless log rotation is in play);
 			// update internal variable which will be confirmed
 			// once we receive a total nicks message
-			this._joinNick = match[2];
+			this._joinNick = match[1];
 		}
 		return {
 			time: time,
-			nick: match[2],
-			mask: match[3]
+			nick: match[1],
+			mask: match[2]
 		};
 	},
-	part: function (match) {
+	part: function (match, time) {
 		return {
-			time: combineDateTime(this.currentDate, match[1]),
-			nick: match[2],
-			mask: match[3],
-			message: match[4]
+			time: time,
+			nick: match[1],
+			mask: match[2],
+			message: match[3]
 		};
 	},
-	quit: function (match) {
+	quit: function (match, time) {
 		return {
-			time: combineDateTime(this.currentDate, match[1]),
-			nick: match[2],
-			mask: match[3],
-			message: match[4]
+			time: time,
+			nick: match[1],
+			mask: match[2],
+			message: match[3]
 		};
 	},
-	kick: function (match) {
+	kick: function (match, time) {
 		return {
-			time: combineDateTime(this.currentDate, match[1]),
-			nick: match[2],
-			by: match[3],
-			message: match[4]
+			time: time,
+			nick: match[1],
+			by: match[2],
+			message: match[3]
 		};
 	},
-	nick: function (match) {
+	nick: function (match, time) {
 		return {
-			time: combineDateTime(this.currentDate, match[1]),
-			nick: match[2],
-			newNick: match[3]
+			time: time,
+			nick: match[1],
+			newNick: match[2]
 		};
 	},
-	ownNick: function (match) {
+	ownNick: function (match, time) {
 		return {
 			type: 'nick',
-			time: combineDateTime(this.currentDate, match[1]),
+			time: time,
 			nick: this._nick || this.defaultNick,
-			newNick: (this._nick = match[2])
+			newNick: (this._nick = match[1])
 		};
 	},
-	nicks: function (match) {
-		var time = combineDateTime(this.currentDate, match[1]);
-
+	nicks: function (match, time) {
 		// "Total of x nicks" message logs immediately after client joins,
 		// but also any time the /names command is manually run;
 		// in only the former case, update logging client's current nick
@@ -115,42 +138,45 @@ var mappings = {
 
 		return {
 			time: time,
-			total: match[2],
-			ops: match[3],
-			halfops: match[4],
-			voices: match[5],
-			normal: match[6]
+			total: match[1],
+			ops: match[2],
+			halfops: match[3],
+			voices: match[4],
+			normal: match[5]
 		};
 	},
-	mode: function (match) {
+	mode: function (match, time) {
 		return {
-			time: combineDateTime(this.currentDate, match[1]),
-			mode: match[2],
-			by: match[3]
+			time: time,
+			mode: match[1],
+			by: match[2]
 		};
 	},
-	message: function (match) {
+	message: function (match, time) {
 		return {
-			time: combineDateTime(this.currentDate, match[1]),
-			mode: match[2],
-			nick: match[3],
-			message: match[4]
-		};
-	},
-	action: function (match) {
-		return {
-			time: combineDateTime(this.currentDate, match[1]),
+			time: time,
+			mode: match[1],
 			nick: match[2],
 			message: match[3]
 		};
+	},
+	action: function (match, time) {
+		return {
+			time: time,
+			nick: match[1],
+			message: match[2]
+		};
 	}
 };
-// Order to test RegExps in, from least to most common (will iterate backwards)
-var testOrder = [
-	'nicks',
+
+// Order to test RegExps in, from roughly least to most common (will iterate backwards)
+var testOrderNoStamp = [
 	'daychange',
 	'logclose',
-	'logopen',
+	'logopen'
+];
+var testOrderStamp = [
+	'nicks',
 	'ownNick',
 	'kick',
 	'mode',
@@ -164,46 +190,14 @@ var testOrder = [
 
 function combineDateTime(date, time) {
 	// Yields a new Date object combining the given Date object and
-	// a "hh:mm:ss" time string.
+	// a "hh:mm" or "hh:mm:ss" time string.
 	var dateTime = new Date(date);
 	var timeParts = time.split(':');
-	dateTime.setHours(parseInt(timeParts[0], 10));
-	dateTime.setMinutes(parseInt(timeParts[1], 10));
-	dateTime.setSeconds(parseInt(timeParts[2] || 0, 10));
+	dateTime.setHours(+timeParts[0]);
+	dateTime.setMinutes(+timeParts[1]);
+	dateTime.setSeconds(+timeParts[2] || 0);
 	return dateTime;
 }
-
-/**
- * Hash containing regular expressions (or strings convertible to RegExps)
- * to use for scanning log lines.  All properties are optional, and will
- * default to regular expressions which match against irssi's default
- * log format.
- * @typedef {Object} ParserRegexps
- * @property {string|RegExp} logopen "Log opened" message; $1 = date+time
- * @property {string|RegExp} logclose "Log closed" message; $1 = date+time
- * @property {string|RegExp} daychange "Day changed" message; $1 = date+time;
- *		Note that these lines will not emit events
- * @property {string|RegExp} join "X has joined" message;
- *		`$1` = time, `$2` = nick, `$3` = mask
- * @property {string|RegExp} part "X has left" message;
- *		`$1` = time, `$2` = nick, `$3` = mask, `$4` = message
- * @property {string|RegExp} quit "X has quit" message;
- *		`$1` = time, `$2` = nick, `$3` = mask, `$4` = message
- * @property {string|RegExp} kick "X was kicked" message;
- *		`$1` = time, `$2` = nick, `$3` = kicker, `$4` = message
- * @property {string|RegExp} nick "X is now known as Y" message;
- *		`$1` = time, `$2` = old nick, `$3` = new nick
- * @property {string|RegExp} ownNick "You're now known as X" message;
- *		`$1` = time, `$2` = new nick
- * @property {string|RegExp} nicks "Total of ..." message;
- *		`$1` = time, `$2` = total, `$3` = ops, `$4` = halfops, `$5` = voices, `$6` = normal
- * @property {string|RegExp} mode "mode ... by X" message;
- *		`$1` = time, `$2` = modes, `$3` = moder
- * @property {string|RegExp} message Normal message;
- *		`$1` = time, `$2` = mode, `$3` = nick, `$4` = message
- * @property {string|RegExp} action Action (i.e. the /me command);
- *		`$1` = time, `$2` = nick, `$3` = message
- */
 
 /**
  * Options recognized by the Parser constructor.
@@ -252,14 +246,21 @@ mixin(Parser.prototype, /** @lends Parser.prototype */ {
 	defaultNick: 'logging client',
 
 	_parseLine: function (line) {
-		var i = testOrder.length;
 		var regexps = this.regexps || defaultRegexps;
+		var matchstamp = regexps.timestamp.exec(line);
+		var time;
+		var testOrder = matchstamp ? testOrderStamp : testOrderNoStamp;
+		if (matchstamp) {
+			line = line.slice(matchstamp[0].length);
+			time = combineDateTime(this.currentDate, matchstamp[0]);
+		}
+		var i = testOrder.length;
 		var match;
 
 		while (i--) {
 			var key = testOrder[i];
 			if ((match = regexps[key].exec(line))) {
-				var object = mappings[key].call(this, match);
+				var object = mappings[key].call(this, match, time);
 				if (object && !object.type) {
 					object.type = key;
 				}
@@ -358,7 +359,7 @@ mixin(Parser.prototype, /** @lends Parser.prototype */ {
 	},
 
 	/**
-	 * Object containing a remove method for unhooking itself.
+	 * Object containing a `remove` method for unhooking itself.
 	 * @typedef {Object} RemovableListener
 	 * @property {function} remove Method that can be called to unhook the listener
 	 */
